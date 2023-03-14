@@ -20,12 +20,18 @@ async fn main() -> Result<(), color_eyre::Report> {
     let devices = enumerator.scan_devices()?;
 
     for device in devices {
-        log::debug!("SysPath - {:?}", device.syspath());
+        if !device
+            .property_value("ID_PCI_SUBCLASS_FROM_DATABASE")
+            .filter(|v| v.eq_ignore_ascii_case("Infiniband controller"))
+            .is_some() {
+                continue
+        }
+        log::info!("SysPath - {:?}", device.syspath());
         for p in device.properties() {
-            log::debug!("Property - {:?} - {:?}", p.name(), p.value());
+            log::info!("Property - {:?} - {:?}", p.name(), p.value());
         }
         for a in device.attributes() {
-            log::debug! {"attribute - {:?} - {:?}", a.name(), a.value()}
+            log::info! {"attribute - {:?} - {:?}", a.name(), a.value()}
         }
     }
 
