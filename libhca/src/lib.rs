@@ -20,7 +20,7 @@ mod pci;
 pub struct HCA {
     pub description: String,
     pub serial_number: String,
-    pub driver: String, 
+    pub driver: String,
     pub functions: Vec<Function>,
 }
 
@@ -31,13 +31,12 @@ pub struct Function {
 }
 
 /// List the HCAs on the host.
-pub fn list_hcas() -> Vec<HCA> {
-  let mut filter = pci::pci_filter{};
-  let mut   pacc = pci::pci_alloc();
+pub fn list_hca() -> Vec<HCA> {
+    let mut hcas = vec![];
 
-  pci::pci_filter_init(pacc, &filter);
+    unsafe {
+        pci::list_hca();
+    }
 
-
-  vec![]
+    hcas
 }
-

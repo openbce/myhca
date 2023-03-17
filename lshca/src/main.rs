@@ -10,12 +10,11 @@ async fn main() -> Result<(), color_eyre::Report> {
     let info = uname()?;
     print!("{:?}\n\n", info);
 
-    let hcas = libhca::list_hcas();
+    let hcas = libhca::list_hca();
     for hca in hcas {
         println!("{:<15}: {}", "Description", hca.description);
         println!("{:<15}: {}", "SerialNumber", hca.serial_number);
     }
-
 
     /*
     let args: Vec<String> = env::args().collect();

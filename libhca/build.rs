@@ -4,26 +4,22 @@ use std::path::PathBuf;
 
 fn main() {
     // Tell cargo to look for shared libraries in the specified directory
-    println!("cargo:rustc-link-search=/usr/lib/x86_64-linux-gnu/");
+    println!("cargo:rustc-link-search=c");
 
     println!("cargo:rustc-link-lib=pci");
+    println!("cargo:rustc-link-lib=hca");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=/usr/include/x86_64-linux-gnu/pci/pci.h");
+    println!("cargo:rerun-if-changed=c/hca.h");
+    println!("cargo:rerun-if-changed=c/hca.c");
 
-    // The bindgen::Builder is the main entry point
-    // to bindgen, and lets you build up options for
-    // the resulting bindings.
+    cc::Build::new().file("c/hca.c").compile("libhca.a");
+
+    // Build binding builder
     let bindings = bindgen::Builder::default()
-        // The input header we would like to generate
-        // bindings for.
-        .header("/usr/include/x86_64-linux-gnu/pci/pci.h")
-        // Tell cargo to invalidate the built crate whenever any of the
-        // included header files changed.
+        .header("c/hca.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        // Finish the builder and generate the bindings.
         .generate()
-        // Unwrap the Result and panic on failure.
         .expect("Unable to generate bindings");
 
     // Write the bindings to the src/pci.rs file.
