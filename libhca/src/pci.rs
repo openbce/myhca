@@ -101,5 +101,8 @@ fn bindgen_test_layout_hca_t() {
     );
 }
 extern "C" {
-    pub fn list_hca() -> *mut *mut hca_t;
+    pub fn get_hca_list() -> *mut *mut hca_t;
+}
+extern "C" {
+    pub fn free_hca_list(arg1: *mut *mut hca_t);
 }

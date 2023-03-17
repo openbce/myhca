@@ -14,6 +14,8 @@ typedef struct {
     function_t** functions;
 } hca_t;
 
-extern hca_t** list_hca();
+extern hca_t** get_hca_list();
+
+extern void free_hca_list(hca_t**);
 
 #endif

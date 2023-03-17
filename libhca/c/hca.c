@@ -15,7 +15,7 @@ void die(char *msg, ...) {
     exit(1);
 }
 
-hca_t** list_hca() {
+hca_t** get_hca_list() {
     struct pci_filter filter;		/* Device filter */
     struct pci_access *pacc;
     struct device *first_dev;
@@ -28,3 +28,8 @@ hca_t** list_hca() {
 
     return 0;
 }
+
+
+void free_hca_list(hca_t** hcas) {
+}
+

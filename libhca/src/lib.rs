@@ -16,6 +16,9 @@ limitations under the License.
 
 mod pci;
 
+use libc::c_char;
+use std::ffi::CStr;
+
 /// HCA
 pub struct HCA {
     pub description: String,
@@ -35,7 +38,10 @@ pub fn list_hca() -> Vec<HCA> {
     let mut hcas = vec![];
 
     unsafe {
-        pci::list_hca();
+        let hca_list = pci::get_hca_list();
+
+
+        pci::free_hca_list(hca_list);
     }
 
     hcas
