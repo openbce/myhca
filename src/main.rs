@@ -1,3 +1,5 @@
+use std::env;
+
 use libudev;
 use log;
 use uname::uname;
@@ -8,24 +10,25 @@ async fn main() -> Result<(), color_eyre::Report> {
     env_logger::init();
 
     let context = libudev::Context::new()?;
+
     // uname to detect type
     let info = uname()?;
+    log::info!("uname - {:?}", info);
 
-    println!("{:?}", info);
+    let args: Vec<String> = env::args().collect();
+    let subsystem: String = {
+        if args.len() > 1 {
+            args[1].clone()
+        } else {
+            "infiniband".to_string()
+        }
+    };
 
-    // Nics
     let mut enumerator = libudev::Enumerator::new(&context)?;
-    enumerator.match_subsystem("infiniband")?;
-    // enumerator.match_subsystem("net")?;
+    enumerator.match_subsystem(subsystem)?;
     let devices = enumerator.scan_devices()?;
 
     for device in devices {
-        if !device
-            .property_value("ID_PCI_SUBCLASS_FROM_DATABASE")
-            .filter(|v| v.eq_ignore_ascii_case("Infiniband controller"))
-            .is_some() {
-                continue
-        }
         log::info!("SysPath - {:?}", device.syspath());
         for p in device.properties() {
             log::info!("Property - {:?} - {:?}", p.name(), p.value());

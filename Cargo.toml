@@ -6,9 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-libudev = "0.3"
 log = "0.4"
-tokio = { version = "1", features = ["full"] }
-uname = "0.1"
 env_logger = { version = "0.10" }
+
+tokio = { version = "1", features = ["full"] }
+
+uname = "0.1"
+libudev = "0.3"
+
 color-eyre = "0.5.11"
