@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-mod pci;
+#![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(non_snake_case)]
+#![allow(dead_code)]
 
-use libc::c_char;
-use std::ffi::CStr;
+mod pci;
 
 /// HCA
 pub struct HCA {
@@ -37,12 +39,12 @@ pub struct Function {
 pub fn list_hca() -> Vec<HCA> {
     let mut hcas = vec![];
 
-    unsafe {
-        let hca_list = pci::get_hca_list();
-
-
-        pci::free_hca_list(hca_list);
-    }
+    //     unsafe {
+    //         let hca_list = pci::get_hca_list();
+    //
+    //
+    //         pci::free_hca_list(hca_list);
+    //     }
 
     hcas
 }

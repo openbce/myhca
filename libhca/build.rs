@@ -3,21 +3,16 @@ extern crate bindgen;
 use std::path::PathBuf;
 
 fn main() {
-    // Tell cargo to look for shared libraries in the specified directory
-    println!("cargo:rustc-link-search=c");
-
     println!("cargo:rustc-link-lib=pci");
-    println!("cargo:rustc-link-lib=hca");
-
-    // Tell cargo to invalidate the built crate whenever the wrapper changes
-    println!("cargo:rerun-if-changed=c/hca.h");
-    println!("cargo:rerun-if-changed=c/hca.c");
-
-    cc::Build::new().file("c/hca.c").compile("libhca.a");
+    println!("cargo:rerun-if-changed=wrappers/*");
 
     // Build binding builder
     let bindings = bindgen::Builder::default()
-        .header("c/hca.h")
+        .header("wrappers/pci.h")
+        .blacklist_type("u8")
+        .blacklist_type("u16")
+        .blacklist_type("u32")
+        .blacklist_type("u64")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");
