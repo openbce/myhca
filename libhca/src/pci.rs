@@ -2788,11 +2788,11 @@ extern "C" {
         __base: ::std::os::raw::c_int,
     ) -> uintmax_t;
 }
-pub type u8 = u8;
-pub type u16 = u16;
-pub type u32 = u32;
-pub type u64 = u64;
-pub type pciaddr_t = u64;
+// pub type u8 = u8;
+// pub type u16 = u16;
+// pub type u32 = u32;
+// pub type u64 = u64;
+// pub type pciaddr_t = u64;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct pci_methods {

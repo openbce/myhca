@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+mod pci;
 
 /// HCA
 pub struct HCA {
@@ -31,6 +32,12 @@ pub struct Function {
 
 /// List the HCAs on the host.
 pub fn list_hcas() -> Vec<HCA> {
-    vec![]
+  let mut filter = pci::pci_filter{};
+  let mut   pacc = pci::pci_alloc();
+
+  pci::pci_filter_init(pacc, &filter);
+
+
+  vec![]
 }
 
