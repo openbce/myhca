@@ -1,20 +1,23 @@
-use std::env;
-
-use libudev;
-use log;
 use uname::uname;
+
+use ::libhca;
 
 #[tokio::main]
 async fn main() -> Result<(), color_eyre::Report> {
     color_eyre::install()?;
-    env_logger::init();
-
-    let context = libudev::Context::new()?;
 
     // uname to detect type
     let info = uname()?;
-    log::info!("uname - {:?}", info);
+    print!("{:?}\n\n", info);
 
+    let hcas = libhca::list_hcas();
+    for hca in hcas {
+        println!("{:<15}: {}", "Description", hca.description);
+        println!("{:<15}: {}", "SerialNumber", hca.serial_number);
+    }
+
+
+    /*
     let args: Vec<String> = env::args().collect();
     let subsystem: String = {
         if args.len() > 1 {
@@ -37,6 +40,7 @@ async fn main() -> Result<(), color_eyre::Report> {
             log::info! {"attribute - {:?} - {:?}", a.name(), a.value()}
         }
     }
+    */
 
     Ok(())
 }
