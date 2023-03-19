@@ -19,7 +19,9 @@ limitations under the License.
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-mod pci;
+mod wrappers;
+
+use wrappers::pci as pci;
 
 /// HCA
 pub struct HCA {

@@ -18,7 +18,7 @@ fn main() {
         .expect("Unable to generate bindings");
 
     // Write the bindings to the src/pci.rs file.
-    let out_path = PathBuf::from("src".to_string());
+    let out_path = PathBuf::from("src/wrappers".to_string());
     bindings
         .write_to_file(out_path.join("pci.rs"))
         .expect("Couldn't write bindings!");
