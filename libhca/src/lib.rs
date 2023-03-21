@@ -19,9 +19,11 @@ limitations under the License.
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
+use std::alloc::{alloc, dealloc, Layout};
+
 mod wrappers;
 
-use wrappers::pci as pci;
+use wrappers::pci;
 
 /// HCA
 pub struct HCA {
@@ -41,8 +43,9 @@ pub struct Function {
 pub struct PciDevice {
     pub vendor_id: u32,
     pub device_id: u32,
-
 }
+
+unsafe fn scan_device(p: *mut pci::pci_dev) {}
 
 pub fn list_pci_device() -> Vec<PciDevice> {
     let mut pcidev = vec![];
@@ -60,21 +63,45 @@ pub fn list_pci_device() -> Vec<PciDevice> {
                 break;
             }
 
-            pcidev.push( PciDevice{
-                    vendor_id: (*dev).vendor_id as u32,
-                    device_id: (*dev).device_id as u32,
+            // Start to fill device info.
+            let cache_layout = Layout::array::<u8>(64).unwrap();
+
+            let mut config_cached = 64;
+            let mut config_bufsize = 64;
+
+            let config: *mut u8 = alloc(cache_layout) as *mut u8;
+            let present: *mut u8 = alloc(cache_layout) as *mut u8;
+
+            if pci::pci_read_block(dev, 0, config, 64) == 0 {
+                dealloc(config, cache_layout);
+                dealloc(present, cache_layout);
+
+                continue;
+            }
+
+            pci::pci_setup_cache(dev, config, config_cached);
+            pci::pci_fill_info(dev, (pci::PCI_FILL_IDENT | pci::PCI_FILL_CLASS) as i32);
+            // -- fill device end.
+
+            // let htype = config[pci::PCI_HEADER_TYPE] & 0x7f;
+            // if htype == pci::PCI_HEADER_TYPE_NORMAL {
+
+            // }
+
+            pcidev.push(PciDevice {
+                vendor_id: (*dev).vendor_id as u32,
+                device_id: (*dev).device_id as u32,
             });
 
-            println!("{:<15}: 0x{:x}", "Vendor ID", (*dev).vendor_id);
-            println!("{:<15}: 0x{:x}", "Device ID", (*dev).device_id);
-            println!("{:<15}: 0x{:x}", "Device Class", (*dev).device_class);
+            dev = (*dev).next;
 
-            dev = (*dev).next
+            // Clearup memory.
+            dealloc(config, cache_layout);
+            dealloc(present, cache_layout);
         }
 
         pci::pci_cleanup(pacc);
     };
-
 
     pcidev
 }
