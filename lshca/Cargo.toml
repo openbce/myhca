@@ -18,5 +18,7 @@ uname = "0.1"
 libudev = "0.3"
 
 color-eyre = "0.5.11"
+tracing = "*"
+tracing-subscriber = "0.3"
 
 

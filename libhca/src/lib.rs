@@ -1,5 +1,5 @@
 /*
-Copyright 2023 The openBCE Authors.
+Copyright 2023 The xflops Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,98 +19,299 @@ limitations under the License.
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use std::alloc::{alloc, dealloc, Layout};
-
 mod wrappers;
 
-use wrappers::pci;
+use std::alloc::{self, Layout};
+use std::collections::HashMap;
+use std::ffi::CStr;
+use std::fmt::Display;
+use std::os::raw::c_int;
+use std::ptr::NonNull;
+use std::{fmt, slice};
+use std::{io, vec};
 
-/// HCA
-pub struct HCA {
-    pub description: String,
-    pub serial_number: String,
-    pub vendor_id: u32,
-    pub driver: String,
-    pub functions: Vec<Function>,
-}
+use libudev;
+use libudev::Device;
+use numeric_cast::NumericCast;
 
-/// Function is the interal concept for Node/Port on the host.
-pub struct Function {
-    pub guid: String,
-    pub lid: i32,
-}
+use wrappers::ibverbs::{
+    self, ibv_device, ibv_device_attr, /*ibv_get_device_index,*/ ibv_get_device_list,
+    ibv_open_device, ibv_port_attr, ibv_query_device, ibv_query_port,
+};
 
+#[derive(Clone)]
 pub struct PciDevice {
-    pub vendor_id: u32,
-    pub device_id: u32,
+    pub id: String,
+    pub subsys_id: String,
+    pub model_name: String,
+    pub vendor_name: String,
+    pub vendor: String,
+    pub ib_devices: Vec<IbDevice>,
 }
 
-unsafe fn scan_device(p: *mut pci::pci_dev) {}
+impl TryFrom<Device> for PciDevice {
+    type Error = io::Error;
+    fn try_from(dev: Device) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: get_property(&dev, "PCI_ID")?.to_string(),
+            subsys_id: get_property(&dev, "PCI_SUBSYS_ID")?.to_string(),
+            model_name: get_property(&dev, "ID_MODEL_FROM_DATABASE")?.to_string(),
+            vendor_name: get_property(&dev, "ID_VENDOR_FROM_DATABASE")?.to_string(),
+            vendor: get_sysattr(&dev, "vendor")?.to_string(),
+            ib_devices: vec![],
+        })
+    }
+}
 
-pub fn list_pci_device() -> Vec<PciDevice> {
-    let mut pcidev = vec![];
+#[derive(Clone)]
+pub struct IbDevice {
+    pub name: String,
+    pub slot_name: String,
+    pub node_guid: String,
+    pub node_desc: String,
+    pub sys_image_guid: String,
+    pub fw_ver: String,
+    pub board_id: String,
+    pub ib_ports: Vec<IbPort>,
+}
 
-    unsafe {
-        let pacc = pci::pci_alloc();
-        pci::pci_init(pacc);
+impl TryFrom<Device> for IbDevice {
+    type Error = io::Error;
+    fn try_from(dev: Device) -> Result<Self, Self::Error> {
+        let slot_name = match dev.parent() {
+            Some(p) => get_property(&p, "PCI_SLOT_NAME")?.to_string(),
+            None => String::new(),
+        };
+        Ok(Self {
+            name: get_property(&dev, "NAME")?.to_string(),
+            slot_name,
+            node_guid: get_sysattr(&dev, "node_guid")?.to_string(),
+            node_desc: get_sysattr(&dev, "node_desc")?.to_string(),
+            sys_image_guid: get_sysattr(&dev, "sys_image_guid")?.to_string(),
+            fw_ver: get_sysattr(&dev, "fw_ver")?.to_string(),
+            board_id: get_sysattr(&dev, "board_id")?.to_string(),
+            ib_ports: vec![],
+        })
+    }
+}
 
-        pci::pci_scan_bus(pacc);
+#[derive(Clone)]
+pub enum IbPortLinkType {
+    Ethernet,
+    Infiniband,
+}
 
-        let mut dev = (*pacc).devices;
-
-        loop {
-            if dev.is_null() {
-                break;
-            }
-
-            // Start to fill device info.
-            let cache_layout = Layout::array::<u8>(64).unwrap();
-
-            let mut config_cached = 64;
-            let mut config_bufsize = 64;
-
-            let config: *mut u8 = alloc(cache_layout) as *mut u8;
-            let present: *mut u8 = alloc(cache_layout) as *mut u8;
-
-            if pci::pci_read_block(dev, 0, config, 64) == 0 {
-                dealloc(config, cache_layout);
-                dealloc(present, cache_layout);
-
-                continue;
-            }
-
-            pci::pci_setup_cache(dev, config, config_cached);
-            pci::pci_fill_info(dev, (pci::PCI_FILL_IDENT | pci::PCI_FILL_CLASS) as i32);
-            // -- fill device end.
-
-            // let htype = config[pci::PCI_HEADER_TYPE] & 0x7f;
-            // if htype == pci::PCI_HEADER_TYPE_NORMAL {
-
-            // }
-
-            pcidev.push(PciDevice {
-                vendor_id: (*dev).vendor_id as u32,
-                device_id: (*dev).device_id as u32,
-            });
-
-            dev = (*dev).next;
-
-            // Clearup memory.
-            dealloc(config, cache_layout);
-            dealloc(present, cache_layout);
+impl TryFrom<u8> for IbPortLinkType {
+    type Error = io::Error;
+    fn try_from(v: u8) -> io::Result<Self> {
+        match v {
+            1 => Ok(Self::Infiniband),
+            2 => Ok(Self::Ethernet),
+            _ => Err(io::Error::last_os_error()),
         }
+    }
+}
 
-        pci::pci_cleanup(pacc);
-    };
+impl Display for IbPortLinkType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ethernet => f.write_str("Eth"),
+            Self::Infiniband => f.write_str("IB"),
+        }
+    }
+}
 
-    pcidev
+#[derive(Clone)]
+pub enum IbPortState {
+    Initializing,
+    Active,
+    Down,
+}
+
+impl Display for IbPortState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Initializing => write!(f, "{}", "Initializing"),
+            Self::Active => write!(f, "{}", "Active"),
+            Self::Down => write!(f, "{}", "Down"),
+        }
+    }
+}
+
+impl TryFrom<u32> for IbPortState {
+    type Error = io::Error;
+    fn try_from(v: u32) -> io::Result<Self> {
+        match v {
+            ibverbs::ibv_port_state::IBV_PORT_INIT => Ok(Self::Initializing),
+            ibverbs::ibv_port_state::IBV_PORT_ACTIVE => Ok(Self::Active),
+            ibverbs::ibv_port_state::IBV_PORT_DOWN => Ok(Self::Down),
+
+            _ => Err(io::Error::last_os_error()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum IbPortPhysState {
+    Polling,
+    LinkUp,
+    Disabled,
+}
+
+impl Display for IbPortPhysState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Polling => f.write_str("Polling"),
+            Self::LinkUp => f.write_str("LinkUp"),
+            Self::Disabled => f.write_str("Disabled"),
+        }
+    }
+}
+
+impl TryFrom<u8> for IbPortPhysState {
+    type Error = io::Error;
+    fn try_from(v: u8) -> io::Result<Self> {
+        match v {
+            2 => Ok(Self::Polling),
+            3 => Ok(Self::Disabled),
+            5 => Ok(Self::LinkUp),
+
+            _ => Err(io::Error::last_os_error()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct IbPort {
+    pub port_num: u8,
+    pub guid: u64,
+    pub lid: u16,
+    pub link_type: IbPortLinkType,
+    pub state: IbPortState,
+    pub phys_state: IbPortPhysState,
+}
+
+#[allow(missing_copy_implementations)] // This type can not copy
+#[repr(transparent)]
+struct DevicePtr(NonNull<ibv_device>);
+
+impl DevicePtr {
+    fn ffi_ptr(&self) -> *mut ibv_device {
+        return self.0.as_ptr();
+    }
+}
+
+#[allow(missing_copy_implementations)] // This type can not copy
+#[repr(transparent)]
+struct DeviceAttrPtr(NonNull<ibv_device_attr>);
+
+impl DeviceAttrPtr {
+    fn ffi_ptr(&self) -> *mut ibv_device_attr {
+        return self.0.as_ptr();
+    }
 }
 
 /// List the HCAs on the host.
-pub fn list_hca() -> Vec<HCA> {
-    let mut hcas = vec![];
+pub fn list_pci_devices() -> io::Result<Vec<PciDevice>> {
+    let mut ibv_devs = HashMap::<String, Vec<IbPort>>::new();
 
-    let _pcidev = list_pci_device();
+    unsafe {
+        let mut num_devices: c_int = 0;
+        let device_list = ibv_get_device_list(&mut num_devices);
+        if device_list.is_null() {
+            return Err(io::Error::last_os_error());
+        }
 
-    hcas
+        let device_list: NonNull<DevicePtr> = NonNull::new_unchecked(device_list.cast());
+        let len: usize = num_devices.numeric_cast();
+
+        let devices = slice::from_raw_parts(device_list.as_ptr(), len);
+
+        for devptr in devices {
+            let ctx = ibv_open_device(devptr.ffi_ptr());
+            if ctx.is_null() {
+                return Err(io::Error::last_os_error());
+            }
+
+            let dev_attr_ptr =
+                alloc::alloc(Layout::new::<ibv_device_attr>()) as *mut ibv_device_attr;
+
+            if ibv_query_device(ctx, dev_attr_ptr) != 0 {
+                return Err(io::Error::last_os_error());
+            };
+
+            let mut ports = vec![];
+
+            for i in 1..=(*dev_attr_ptr).phys_port_cnt {
+                let port_attr_ptr =
+                    alloc::alloc(Layout::new::<ibv_port_attr>()) as *mut ibv_port_attr;
+
+                if ibv_query_port(ctx, i, port_attr_ptr as *mut _) != 0 {
+                    return Err(io::Error::last_os_error());
+                };
+
+                ports.push(IbPort {
+                    port_num: i,
+                    lid: (*port_attr_ptr).lid,
+                    link_type: IbPortLinkType::try_from((*port_attr_ptr).link_layer)?,
+                    guid: (*dev_attr_ptr).node_guid,
+                    state: IbPortState::try_from((*port_attr_ptr).state)?,
+                    phys_state: IbPortPhysState::try_from((*port_attr_ptr).phys_state)?,
+                });
+            }
+
+            ibv_devs.insert(cstr_to_string((*devptr.ffi_ptr()).name.as_ptr()), ports);
+        }
+    };
+
+    let context = libudev::Context::new()?;
+
+    let mut enumerator = libudev::Enumerator::new(&context)?;
+    enumerator.match_subsystem("infiniband")?;
+    let devices = enumerator.scan_devices()?;
+
+    let mut pci_devs = HashMap::<String, PciDevice>::new();
+    for device in devices {
+        if let Some(parent) = device.parent() {
+            let pci_dev = PciDevice::try_from(parent)?;
+            let pci_dev = pci_devs.entry(pci_dev.id.clone()).or_insert(pci_dev);
+
+            let mut ib_dev = IbDevice::try_from(device)?;
+            ib_dev.ib_ports = ibv_devs
+                .get(&ib_dev.name)
+                .unwrap_or(&Vec::<IbPort>::new())
+                .to_vec();
+
+            pci_dev.ib_devices.push(ib_dev);
+        }
+    }
+
+    Ok(pci_devs.into_values().collect())
+}
+
+unsafe fn cstr_to_string(s: *const i8) -> String {
+    CStr::from_ptr(s)
+        .to_str()
+        .expect("not an utf8 string")
+        .to_string()
+}
+
+fn get_property<'a>(device: &'a Device, name: &'a str) -> io::Result<&'a str> {
+    match device.property_value(name) {
+        None => Err(io::Error::last_os_error()),
+        Some(p) => p
+            .to_str()
+            .map(|s| s.trim())
+            .ok_or_else(|| io::Error::last_os_error()),
+    }
+}
+
+fn get_sysattr<'a>(device: &'a Device, name: &'a str) -> io::Result<&'a str> {
+    match device.attribute_value(name) {
+        None => Err(io::Error::last_os_error()),
+        Some(p) => p
+            .to_str()
+            .map(|s| s.trim())
+            .ok_or_else(|| io::Error::last_os_error()),
+    }
 }
