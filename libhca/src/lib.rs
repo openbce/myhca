@@ -33,10 +33,11 @@ use std::{io, vec};
 use libudev;
 use libudev::Device;
 use numeric_cast::NumericCast;
+use scopeguard::defer;
 
 use wrappers::ibverbs::{
-    self, ibv_device, ibv_device_attr, /*ibv_get_device_index,*/ ibv_get_device_list, ibv_gid,
-    ibv_open_device, ibv_port_attr, ibv_query_device, ibv_query_gid, ibv_query_port,
+    self, ibv_close_device, ibv_device, ibv_device_attr, ibv_free_device_list, ibv_get_device_list,
+    ibv_gid, ibv_open_device, ibv_port_attr, ibv_query_device, ibv_query_gid, ibv_query_port,
 };
 
 #[derive(Clone)]
@@ -224,6 +225,9 @@ pub fn list_pci_devices() -> io::Result<Vec<PciDevice>> {
         if device_list.is_null() {
             return Err(io::Error::last_os_error());
         }
+        defer! {
+            ibv_free_device_list(device_list);
+        }
 
         let device_list: NonNull<DevicePtr> = NonNull::new_unchecked(device_list.cast());
         let len: usize = num_devices.numeric_cast();
@@ -235,9 +239,15 @@ pub fn list_pci_devices() -> io::Result<Vec<PciDevice>> {
             if ctx.is_null() {
                 return Err(io::Error::last_os_error());
             }
+            defer! {
+                ibv_close_device(ctx);
+            };
 
             let dev_attr_ptr =
                 alloc::alloc(Layout::new::<ibv_device_attr>()) as *mut ibv_device_attr;
+            defer! {
+                alloc::dealloc(dev_attr_ptr as *mut u8, Layout::new::<ibv_device_attr>());
+            };
 
             if ibv_query_device(ctx, dev_attr_ptr) != 0 {
                 return Err(io::Error::last_os_error());
@@ -248,12 +258,18 @@ pub fn list_pci_devices() -> io::Result<Vec<PciDevice>> {
             for i in 1..=(*dev_attr_ptr).phys_port_cnt {
                 let port_attr_ptr =
                     alloc::alloc(Layout::new::<ibv_port_attr>()) as *mut ibv_port_attr;
+                defer! {
+                    alloc::dealloc(port_attr_ptr as *mut u8, Layout::new::<ibv_port_attr>());
+                };
 
                 if ibv_query_port(ctx, i, port_attr_ptr as *mut _) != 0 {
                     return Err(io::Error::last_os_error());
                 };
 
                 let guid_ptr = alloc::alloc(Layout::new::<ibv_gid>()) as *mut ibv_gid;
+                defer! {
+                    alloc::dealloc(guid_ptr as *mut u8, Layout::new::<ibv_gid>());
+                };
 
                 if ibv_query_gid(ctx, i, 0, guid_ptr) != 0 {
                     return Err(io::Error::last_os_error());

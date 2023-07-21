@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 numeric_cast = "0.2"
 libudev = "0.3"
+scopeguard = "1.2"
 
 [build-dependencies]
 bindgen = "0.53"
