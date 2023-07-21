@@ -35,17 +35,18 @@ use libudev::Device;
 use numeric_cast::NumericCast;
 
 use wrappers::ibverbs::{
-    self, ibv_device, ibv_device_attr, /*ibv_get_device_index,*/ ibv_get_device_list,
-    ibv_open_device, ibv_port_attr, ibv_query_device, ibv_query_port,
+    self, ibv_device, ibv_device_attr, /*ibv_get_device_index,*/ ibv_get_device_list, ibv_gid,
+    ibv_open_device, ibv_port_attr, ibv_query_device, ibv_query_gid, ibv_query_port,
 };
 
 #[derive(Clone)]
 pub struct PciDevice {
-    pub id: String,
     pub subsys_id: String,
     pub model_name: String,
     pub vendor_name: String,
     pub vendor: String,
+    pub board_id: String,
+    pub fw_ver: String,
     pub ib_devices: Vec<IbDevice>,
 }
 
@@ -53,12 +54,14 @@ impl TryFrom<Device> for PciDevice {
     type Error = io::Error;
     fn try_from(dev: Device) -> Result<Self, Self::Error> {
         Ok(Self {
-            id: get_property(&dev, "PCI_ID")?.to_string(),
             subsys_id: get_property(&dev, "PCI_SUBSYS_ID")?.to_string(),
             model_name: get_property(&dev, "ID_MODEL_FROM_DATABASE")?.to_string(),
             vendor_name: get_property(&dev, "ID_VENDOR_FROM_DATABASE")?.to_string(),
             vendor: get_sysattr(&dev, "vendor")?.to_string(),
             ib_devices: vec![],
+
+            board_id: String::new(),
+            fw_ver: String::new(),
         })
     }
 }
@@ -184,7 +187,7 @@ impl TryFrom<u8> for IbPortPhysState {
 #[derive(Clone)]
 pub struct IbPort {
     pub port_num: u8,
-    pub guid: u64,
+    pub guid: Option<String>,
     pub lid: u16,
     pub link_type: IbPortLinkType,
     pub state: IbPortState,
@@ -250,11 +253,34 @@ pub fn list_pci_devices() -> io::Result<Vec<PciDevice>> {
                     return Err(io::Error::last_os_error());
                 };
 
+                let guid_ptr = alloc::alloc(Layout::new::<ibv_gid>()) as *mut ibv_gid;
+
+                if ibv_query_gid(ctx, i, 0, guid_ptr) != 0 {
+                    return Err(io::Error::last_os_error());
+                };
+
+                let link_type = IbPortLinkType::try_from((*port_attr_ptr).link_layer)?;
+
+                let guid = match link_type {
+                    IbPortLinkType::Ethernet => None,
+                    IbPortLinkType::Infiniband => Some(format!(
+                        "{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}:{:02x}{:02x}",
+                        (*guid_ptr).raw[8],
+                        (*guid_ptr).raw[9],
+                        (*guid_ptr).raw[10],
+                        (*guid_ptr).raw[11],
+                        (*guid_ptr).raw[12],
+                        (*guid_ptr).raw[13],
+                        (*guid_ptr).raw[14],
+                        (*guid_ptr).raw[15]
+                    )),
+                };
+
                 ports.push(IbPort {
                     port_num: i,
                     lid: (*port_attr_ptr).lid,
-                    link_type: IbPortLinkType::try_from((*port_attr_ptr).link_layer)?,
-                    guid: (*dev_attr_ptr).node_guid,
+                    link_type,
+                    guid,
                     state: IbPortState::try_from((*port_attr_ptr).state)?,
                     phys_state: IbPortPhysState::try_from((*port_attr_ptr).phys_state)?,
                 });
@@ -274,13 +300,16 @@ pub fn list_pci_devices() -> io::Result<Vec<PciDevice>> {
     for device in devices {
         if let Some(parent) = device.parent() {
             let pci_dev = PciDevice::try_from(parent)?;
-            let pci_dev = pci_devs.entry(pci_dev.id.clone()).or_insert(pci_dev);
+            let pci_dev = pci_devs.entry(pci_dev.subsys_id.clone()).or_insert(pci_dev);
 
             let mut ib_dev = IbDevice::try_from(device)?;
             ib_dev.ib_ports = ibv_devs
                 .get(&ib_dev.name)
                 .unwrap_or(&Vec::<IbPort>::new())
                 .to_vec();
+
+            pci_dev.fw_ver = ib_dev.fw_ver.clone();
+            pci_dev.board_id = ib_dev.board_id.clone();
 
             pci_dev.ib_devices.push(ib_dev);
         }
