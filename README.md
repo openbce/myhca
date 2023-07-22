@@ -6,10 +6,11 @@ MyHCA dependent on `libverbs` and `libudev` to provide tools &amp; lib for the i
 * libhca: a library to get HCA information
 
 
-## Prepare
+## Install
 
 ```
 $ sudo apt install -y libclang-dev libibverbs-dev
+$ cargo install --git https://github.com/xflops/myhca
 ```
 
 
