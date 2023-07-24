@@ -14,6 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+use std::fmt::{self, Display};
+use std::io;
+use std::ptr::NonNull;
+
+use libudev::Device;
+
+use super::utils::{get_property, get_sysattr};
+use super::wrappers::ibverbs::{
+    self, ibv_device, ibv_device_attr,
+};
 
 #[derive(Clone)]
 pub struct PciDevice {
@@ -110,9 +120,9 @@ pub enum IbPortState {
 impl Display for IbPortState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Initializing => write!(f, "{}", "Initializing"),
-            Self::Active => write!(f, "{}", "Active"),
-            Self::Down => write!(f, "{}", "Down"),
+            Self::Initializing => write!(f, "Initializing"),
+            Self::Active => write!(f, "Active"),
+            Self::Down => write!(f, "Down"),
         }
     }
 }
@@ -172,20 +182,20 @@ pub struct IbPort {
 
 #[allow(missing_copy_implementations)] // This type can not copy
 #[repr(transparent)]
-struct DevicePtr(NonNull<ibv_device>);
+pub struct DevicePtr(NonNull<ibv_device>);
 
 impl DevicePtr {
-    fn ffi_ptr(&self) -> *mut ibv_device {
-        return self.0.as_ptr();
+    pub fn ffi_ptr(&self) -> *mut ibv_device {
+        self.0.as_ptr()
     }
 }
 
 #[allow(missing_copy_implementations)] // This type can not copy
 #[repr(transparent)]
-struct DeviceAttrPtr(NonNull<ibv_device_attr>);
+pub struct DeviceAttrPtr(NonNull<ibv_device_attr>);
 
 impl DeviceAttrPtr {
-    fn ffi_ptr(&self) -> *mut ibv_device_attr {
-        return self.0.as_ptr();
+    pub fn ffi_ptr(&self) -> *mut ibv_device_attr {
+        self.0.as_ptr()
     }
 }

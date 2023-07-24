@@ -19,26 +19,34 @@ limitations under the License.
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
+mod types;
+mod utils;
 mod wrappers;
 
 use std::alloc::{self, Layout};
 use std::collections::HashMap;
-use std::ffi::CStr;
-use std::fmt::Display;
+
+
 use std::os::raw::c_int;
 use std::ptr::NonNull;
-use std::{fmt, slice};
+use std::{slice};
 use std::{io, vec};
 
-use libudev;
-use libudev::Device;
+
+
 use numeric_cast::NumericCast;
 use scopeguard::defer;
 
 use wrappers::ibverbs::{
-    self, ibv_close_device, ibv_device, ibv_device_attr, ibv_free_device_list, ibv_get_device_list,
+    ibv_close_device, ibv_device_attr, ibv_free_device_list, ibv_get_device_list,
     ibv_gid, ibv_open_device, ibv_port_attr, ibv_query_device, ibv_query_gid, ibv_query_port,
 };
+
+use types::{
+    DevicePtr, IbDevice, IbPort, IbPortLinkType, IbPortPhysState, IbPortState,
+    PciDevice,
+};
+use utils::{cstr_to_string};
 
 /// List the HCAs on the host.
 pub fn list_pci_devices() -> io::Result<Vec<PciDevice>> {

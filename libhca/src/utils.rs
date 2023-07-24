@@ -14,30 +14,34 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+use std::ffi::CStr;
+use std::io;
 
-unsafe fn cstr_to_string(s: *const i8) -> String {
+use libudev::Device;
+
+pub unsafe fn cstr_to_string(s: *const i8) -> String {
     CStr::from_ptr(s)
         .to_str()
         .expect("not an utf8 string")
         .to_string()
 }
 
-fn get_property<'a>(device: &'a Device, name: &'a str) -> io::Result<&'a str> {
+pub fn get_property<'a>(device: &'a Device, name: &'a str) -> io::Result<&'a str> {
     match device.property_value(name) {
         None => Err(io::Error::last_os_error()),
         Some(p) => p
             .to_str()
             .map(|s| s.trim())
-            .ok_or_else(|| io::Error::last_os_error()),
+            .ok_or_else(io::Error::last_os_error),
     }
 }
 
-fn get_sysattr<'a>(device: &'a Device, name: &'a str) -> io::Result<&'a str> {
+pub fn get_sysattr<'a>(device: &'a Device, name: &'a str) -> io::Result<&'a str> {
     match device.attribute_value(name) {
         None => Err(io::Error::last_os_error()),
         Some(p) => p
             .to_str()
             .map(|s| s.trim())
-            .ok_or_else(|| io::Error::last_os_error()),
+            .ok_or_else(io::Error::last_os_error),
     }
 }

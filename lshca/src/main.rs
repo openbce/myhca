@@ -31,7 +31,7 @@ async fn main() -> Result<(), color_eyre::Report> {
         println!("{:<15}: {}", "FW", hca.fw_ver);
         println!("{:<15}: {}", "Board", hca.board_id);
 
-        println!("");
+        println!();
 
         println!(
             "    {:<15}{:<15}{:<25}{:<25}{:<15}{:<15}{:<15}{:<15}",
@@ -54,8 +54,8 @@ async fn main() -> Result<(), color_eyre::Report> {
             }
         }
 
-        println!("");
-        println!("");
+        println!();
+        println!();
     }
 
     //     let context = libudev::Context::new()?;
