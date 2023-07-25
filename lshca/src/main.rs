@@ -16,6 +16,8 @@ limitations under the License.
 
 use ::libhca;
 
+// use libudev::Device;
+
 #[tokio::main]
 async fn main() -> Result<(), color_eyre::Report> {
     color_eyre::install()?;
@@ -58,26 +60,26 @@ async fn main() -> Result<(), color_eyre::Report> {
         println!();
     }
 
-    //     let context = libudev::Context::new()?;
+    //    let context = libudev::Context::new()?;
     //
-    //     let device_debug_log = |device: &Device| {
-    //         let device = device.parent().unwrap();
-    //         println!("SysPath - {:?}", device.syspath());
-    //         for p in device.properties() {
-    //             println!("Property - {:?} - {:?}", p.name(), p.value());
-    //         }
-    //         for a in device.attributes() {
-    //             println!("attribute - {:?} - {:?}", a.name(), a.value());
-    //         }
-    //     };
+    //    let device_debug_log = |device: &Device| {
+    //        //        let device = device.parent().unwrap();
+    //        println!("SysPath - {:?}", device.syspath());
+    //        for p in device.properties() {
+    //            println!("Property - {:?} - {:?}", p.name(), p.value());
+    //        }
+    //        for a in device.attributes() {
+    //            println!("attribute - {:?} - {:?}", a.name(), a.value());
+    //        }
+    //    };
     //
-    //     let mut enumerator = libudev::Enumerator::new(&context)?;
-    //     enumerator.match_subsystem("infiniband")?;
-    //     let devices = enumerator.scan_devices()?;
+    //    let mut enumerator = libudev::Enumerator::new(&context)?;
+    //    enumerator.match_subsystem("pci")?;
+    //    let devices = enumerator.scan_devices()?;
     //
-    //     for device in devices {
-    //         device_debug_log(&device);
-    //     }
+    //    for device in devices {
+    //        device_debug_log(&device);
+    //    }
 
     Ok(())
 }
