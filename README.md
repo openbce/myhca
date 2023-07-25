@@ -9,7 +9,7 @@ MyHCA dependent on `libverbs` and `libudev` to provide tools &amp; lib for the i
 ## Install
 
 ```
-$ sudo apt install -y libclang-dev libibverbs-dev
+$ sudo apt install -y libclang-dev libibverbs-dev libudev-dev pkg-config
 $ cargo install --git https://github.com/xflops/myhca
 ```
 
